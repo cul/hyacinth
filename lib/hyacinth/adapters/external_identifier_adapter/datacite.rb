@@ -4,9 +4,13 @@ module Hyacinth
   module Adapters
     module ExternalIdentifierAdapter
       class Datacite < Abstract
-        IDENTIFIER_STATUS = { public: 'public',
-                              reserved: 'reserved',
-                              unavailable: 'unavailable' }.freeze
+        DOI_STATES = [:draft, :findable, :registered].freeze
+        # Following maps the desired state to the event which triggers the state change
+        # see https://support.datacite.org/docs/how-do-i-make-a-findable-doi-with-the-rest-api
+        DOI_STATE_CHANGE_EVENT = { to_draft: '',
+                                   to_findable: 'publish',
+                                   draft_to_registered: 'register',
+                                   findable_to_registered: 'hide' }.freeze
         def initialize(adapter_config = {})
           super(adapter_config)
         end
@@ -15,6 +19,42 @@ module Hyacinth
         # @return [Boolean] true if this adapter can handle this type of identifier
         def handles?(id)
           id =~ /^10\.[A-Za-z0-9]+\/[A-Za-z0-9\-]+/
+        end
+
+        # metadata is not required when minting a draft DOI. HOWEVER, it is strongly recommended that the required metadata be provided at
+        # minting time, since this metadata will be required when the DOI state is changed from draft to findable (DataCite REST
+        # API will complain). Also, to simplify the possible use cases, when minting a draft DOI, either no metadata is supplied, or the
+        # full complement of required metadata is supplied. There is no support for partial metadata in this implementation, though it is
+        # supported by the DataCite REST API.
+        # To mint a findable DOI, the full complement of required metadata is always needed; The DataCite REST API will complain if
+        # that is not the case.
+        # According to the DataCite REST API, a DOI can be specified at mint time (Of course, this has to be a non-existent DOI).
+        # The current implementation does not support this since there is no use case in Hyacinth for it at the moment.
+        def mint_doi(metadata = nil,
+                     doi_state = :draft,
+                     _doi = nil)
+          rest_api = Hyacinth::Adapters::ExternalIdentifierAdapter::Datacite::RestApi::V2::Api.new(DATACITE[:rest_api],
+                                                                                                   DATACITE[:user],
+                                                                                                   DATACITE[:password])
+          data = Hyacinth::Adapters::ExternalIdentifierAdapter::Datacite::RestApi::V2::Data.new
+          data.build_mint(DATACITE[:prefix], doi_state, metadata)
+          rest_api_response = rest_api.post_dois data
+          unless rest_api_response.code.eql? '201'
+            raise "Did not mint a DOI! Response Code: #{rest_api_response.code}." \
+                  "Response Body: #{rest_api_response.body}." \
+                  "Request Body: #{rest_api.most_recent_request_body}"
+          end
+          rest_api.doi(rest_api_response.body)
+        end
+
+        # This method needs all the required metadata as specified in [insert module], even if only
+        def update_doi(metadata,
+                       doi,
+                       doi_state = nil)
+          rest_api = Hyacinth::Adapters::ExternalIdentifierAdapter::Datacite::RestApi::V2::Api.new
+          rest_api.build_update_payload(metadata, doi_state)
+          rest_api_response = rest_api.put_dois(DATACITE[:rest_api], DATACITE[:user], DATACITE[:password], doi)
+          rest_api_response.body
         end
 
         # Generates a new persistent id, ensuring that nothing currently uses that identifier.
