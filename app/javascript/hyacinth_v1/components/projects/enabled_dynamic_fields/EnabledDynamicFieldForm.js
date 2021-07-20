@@ -12,7 +12,9 @@ import { getEnabledDynamicFieldsQuery, updateEnabledDynamicFieldsMutation } from
 import { getDynamicFieldGraphQuery } from '../../../graphql/dynamicFieldCategories';
 
 const DynamicField = (props) => {
-  const { field, initalFieldData, enabledFieldDataCallback, disabled } = props;
+  const {
+    field, enabledFieldDataCallback, disabled,
+  } = props;
   const [fieldSets] = useState([]);
   const [enabledFieldData, setEnabledFieldData] = useState(enabledFieldDataCallback(field.id));
 
@@ -160,7 +162,9 @@ const DynamicField = (props) => {
 };
 
 const DynamicFieldGroup = (props) => {
-  const { group, handlers, enabledFieldDataCallback } = props;
+  const {
+    group, enabledFieldDataCallback, disabled,
+  } = props;
   return (
     <Card key={`group_content_${group.id}`} className="mt-2 mb-3">
       <Card.Body>
@@ -176,8 +180,8 @@ const DynamicFieldGroup = (props) => {
                     <DynamicFieldGroup
                       group={child}
                       key={child.id}
-                      handlers={handlers}
                       enabledFieldDataCallback={enabledFieldDataCallback}
+                      disabled={disabled}
                     />
                   );
                 case 'DynamicField':
@@ -185,8 +189,8 @@ const DynamicFieldGroup = (props) => {
                     <DynamicField
                       field={child}
                       key={child.id}
-                      handlers={handlers}
                       enabledFieldDataCallback={enabledFieldDataCallback}
+                      disabled={disabled}
                     />
                   );
                 default:
@@ -201,7 +205,7 @@ const DynamicFieldGroup = (props) => {
 };
 
 const DynamicFieldCategory = (props) => {
-  const { category, enabledFieldDataCallback } = props;
+  const { category, enabledFieldDataCallback, disabled } = props;
   return (
     <>
       <h4 className="text-center text-orange">{category.displayLabel}</h4>
@@ -210,6 +214,7 @@ const DynamicFieldCategory = (props) => {
           group={child}
           key={child.id}
           enabledFieldDataCallback={enabledFieldDataCallback}
+          disabled={disabled}
         />
       )) }
     </>
@@ -223,7 +228,9 @@ export const EnabledDynamicFieldForm = (props) => {
   const [disabled] = useState(formType !== 'edit');
   const [enabledDynamicFields] = useState({});
 
-  const variables = { project: { stringKey: projectStringKey }, digitalObjectType: digitalObjectType.toUpperCase() };
+  const variables = {
+    project: { stringKey: projectStringKey }, digitalObjectType: digitalObjectType.toUpperCase(),
+  };
 
   const {
     loading: enabledFieldsLoading,
@@ -287,6 +294,10 @@ export const EnabledDynamicFieldForm = (props) => {
       .then(historyPromise);
   };
 
+  const onSuccessHandler = (result) => {
+    history.push(`/projects/${projectStringKey}/enabled_dynamic_fields/${digitalObjectType}`);
+  };
+
   const enabledFieldDataCallback = (dynamicFieldId, data) => {
     if (data) {
       enabledDynamicFields[dynamicFieldId] = { ...data };
@@ -302,6 +313,7 @@ export const EnabledDynamicFieldForm = (props) => {
             key={category.id}
             category={category}
             enabledFieldDataCallback={enabledFieldDataCallback}
+            disabled={disabled}
           />
         ))
       }
@@ -311,6 +323,7 @@ export const EnabledDynamicFieldForm = (props) => {
             formType="edit"
             cancelTo={`/projects/${projectStringKey}/enabled_dynamic_fields/${digitalObjectType}`}
             onSave={onSubmitHandler}
+            onSuccess={onSuccessHandler}
           />
         )
       }
@@ -322,6 +335,42 @@ EnabledDynamicFieldForm.propTypes = {
   formType: PropTypes.string.isRequired,
   projectStringKey: PropTypes.string.isRequired,
   digitalObjectType: PropTypes.string.isRequired,
+};
+
+DynamicFieldCategory.propTypes = {
+  category: PropTypes.shape({
+    id: PropTypes.number,
+    displayLabel: PropTypes.string,
+    children: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.number,
+      }),
+    ),
+  }).isRequired,
+  enabledFieldDataCallback: PropTypes.func.isRequired,
+  disabled: PropTypes.bool.isRequired,
+};
+
+DynamicFieldGroup.propTypes = {
+  group: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    displayLabel: PropTypes.string.isRequired,
+    children: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.number,
+      }),
+    ),
+  }).isRequired,
+  enabledFieldDataCallback: PropTypes.func.isRequired,
+  disabled: PropTypes.bool.isRequired,
+};
+
+DynamicField.propTypes = {
+  field: PropTypes.shape({
+    id: PropTypes.number,
+  }).isRequired,
+  enabledFieldDataCallback: PropTypes.func.isRequired,
+  disabled: PropTypes.bool.isRequired,
 };
 
 export default EnabledDynamicFieldForm;
